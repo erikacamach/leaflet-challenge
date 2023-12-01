@@ -1,110 +1,108 @@
-// Store the API endpoint as queryUrl.
-const queryUrl = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson";
+// Store our geojson link as queryUrl.
+let queryUrl = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson";
+//let queryUrl = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson";
 
 // Perform a GET request to the query URL.
-d3.json(queryUrl).then(function (data) {
-  // Once we get a response, send the data.features object to the createFeatures function.
-  createFeatures(data.features);
+d3.json(queryUrl).then(function (data) {  
+  // Pass the features to a createMap() function:
+  createMap(data.features);
+
 });
 
-function createFeatures(earthquakeData) {
-  // Define a function that runs once for each feature in the features array.
-  // Give each feature a popup that describes the place and time of the earthquake.
-  function onEachFeature(feature, layer) {
-    layer.bindPopup(`<h3>${feature.properties.place}</h3><hr><p>${new Date(feature.properties.time)}</p><p><strong>Magnitude: ${feature.properties.mag}<br>Depth: ${feature.geometry.coordinates[2]} km</strong></p>`);
-  }
-
-  // Create a GeoJSON layer that contains the features array on the earthquakeData object.
-  // Run the onEachFeature function once for each piece of data in the array.
-  const earthquakes = L.geoJSON(earthquakeData, {
-    onEachFeature: onEachFeature,
-    pointToLayer: function (feature, latlng) {
-      return L.circleMarker(latlng, {
-        radius: feature.properties.mag * 2,
-        fillColor: getColor(feature.geometry.coordinates[2]),
-        color: "#000",
-        weight: 1,
-        opacity: 1,
-        fillOpacity: 0.8
-      });
+// To set markerSize based on the magnitude of the earthquake
+function markerSize(magnitude){
+    
+    if(magnitude == 0)
+    { return 1; }
+    else
+    {
+        let msize = magnitude * 35000;    
+        return msize;
     }
-  });
-
-  // Send our earthquakes layer to the createMap function.
-  createMap(earthquakes);
-
-  // Function to generate color based on depth using a gradient scale.
-  function getColor(depth) {
-    const depthRanges = [-5, 5, 25, 75, 100, 200, 700]; // Define depth ranges.
-    const colors = ['#EB7D5B', '#FED23F', '#B5D33D', '#6CA2EA', '#442288', '#404040']; // Corresponding colors for depth ranges.
-
-    // Loop through depth ranges and return the corresponding color for the given depth.
-    for (let i = 0; i < depthRanges.length - 1; i++) {
-      if (depth >= depthRanges[i] && depth < depthRanges[i + 1]) {
-        return colors[i];
-      }
-    }
-
-    // If depth is greater than the last defined range, return the last color.
-    return colors[depthRanges.length - 1];
-  }
 }
 
-function createMap(earthquakes) {
-  // Create the base layers.
-  const street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  });
+// Define the array of colors for legend
+var colors = ["green","lightgreen","yellow","orange","red","darkred"];
+//Define the array of limits for legend
+var limits = [-10,10,30,50,70,90]
 
-  const topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-    attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
-  });
+// Function to return color based on the depth (in KM) of earthquake (for legend)
+function markerColor (depthValue){
+    //Depth greater than 90
+    if( depthValue > limits[5]) {return colors[5]}
+    //Depth 70-90 
+    else if(depthValue > limits[4] && depthValue <= limits[5]){ return colors[4] }
+    //Depth 50-70
+    else if (depthValue > limits[3] && depthValue <= limits[4]){ return colors[3] }
+    //Depth 30-50
+    else if (depthValue > limits[2] && depthValue <= limits[3]){ return colors[2] }
+    //Depth 10-30
+    else if (depthValue > limits[1] && depthValue <= limits[2]){ return colors[1] }
+    //Depth -10-10
+    else if (depthValue > limits[0] && depthValue <= limits[1]){ return colors[0] }
+    //Depth less than -10
+    else {return "gray"}
+}
 
-  const satellite = L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-    maxZoom: 20,
-    subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
-  });
+function createMap(featuresData){
 
-  // Create a baseMaps object.
-  const baseMaps = {
-    "Street Map": street,
-    "Topographic Map": topo,
-    "Satellite Map": satellite
-  };
+    //Get the coordinates of first element to set the center point
+    let centerPoint = [featuresData[0].geometry.coordinates[1],featuresData[0].geometry.coordinates[0]];    
+    let myMap = L.map("map", {
+        center: centerPoint,
+        zoom: 3
+      });
+      
+    // Add a tile layer.
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(myMap);
 
-  // Create an overlay object to hold our overlay.
-  const overlayMaps = {
-    Earthquakes: earthquakes
-  };
+    //Add the markers
+    featuresData.forEach(element => {
+        let lon = element.geometry.coordinates[0];
+        let lat = element.geometry.coordinates[1];
+        let depth = element.geometry.coordinates[2];     
+        
+        L.circle([lat,lon],
+        {
+            radius: markerSize(element.properties.mag),
+            color: "black",
+            weight:0.2,
+            fillColor:markerColor(depth) ,
+            fillOpacity: 0.7,            
+        }
+        ).bindPopup(`<h4>${element.properties.title} at depth ${depth} KM</h4>`)
+        .addTo(myMap)
+    });
 
-  // Create our map, giving it the streetmap and earthquakes layers to display on load.
-  const myMap = L.map("map", {
-    center: [37.09, -95.71],
-    zoom: 5,
-    layers: [street, earthquakes]
-  });
+        // Set up the legend
+        let legend = L.control({ position: "bottomright" });
+        legend.onAdd = function() {
+            let div = L.DomUtil.create("div", "info legend");
+            let legendLimits = limits;
+            let legendColors = colors;
+            let labels = [];            
 
-  // Create a layer control.
-  // Pass it our baseMaps and overlayMaps.
-  // Add the layer control to the map.
-  L.control.layers(baseMaps, overlayMaps, {
-    collapsed: false
-  }).addTo(myMap);
+            // Legend Title
+             let legendInfo = "<h3>Earthquake Depth in KM</h3>"; 
+             div.innerHTML = legendInfo;
+             
+            // Set legend values
+            for (let i=0; i < legendLimits.length; i++ )
+            {
+                if (i == (legendLimits.length -1))
+                { labels.push("<li style=\"background-color: " + legendColors[i] + "\">" + "<b>"+  legendLimits[i] + "\+" + " </b></li>");
+                }
+                else
+                {labels.push("<li style=\"background-color: " + legendColors[i] + "\">" + "<b>"+  legendLimits[i]  + " - " + legendLimits[i+1] + "</b></li>");
+                }
+            }
+            div.innerHTML += "<ul>" + labels.join("") + "</ul>";
+            return div;
+        };
 
-  // Add a basic legend to the map.
-  const legend = L.control({ position: "bottomright" });
+    // Adding the legend to the map
+    legend.addTo(myMap);
 
-  legend.onAdd = function (map) {
-    const div = L.DomUtil.create("div", "info legend");
-    div.innerHTML = '<h3 style="margin-top: 0;">Depth</h3>' +
-      '<i style="background:#EB7D5B"></i> -5&ndash;5 km<br><br>' +
-      '<i style="background:#FED23F"></i> 5&ndash;25 km<br><br>' +
-      '<i style="background:#B5D33D"></i> 25&ndash;75 km<br><br>' +
-      '<i style="background:#6CA2EA"></i> 75&ndash;100 km<br><br>' +
-      '<i style="background:#442288"></i> 100&ndash;200 km<br><br>' +
-      '<i style="background:#404040"></i> 200+ km';
-    return div;
-  };
-
-  legend.addTo(myMap);
 }
